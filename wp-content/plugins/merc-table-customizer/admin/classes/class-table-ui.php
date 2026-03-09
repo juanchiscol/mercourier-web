@@ -717,25 +717,26 @@ class MERC_Table_UI {
             }
 
             // Manejador para botón BORRAR/DELETE (wpcfe-delete-shipment)
-            // Este manejador se ejecuta al hacer click en el botón de borrar de las acciones
-            // Desbloquear manejador anterior (si existe) para evitar duplicados
+            // Usa event delegation desde document para funcionar también en el accordion.
+            // stopImmediatePropagation evita que el handler nativo de WPCargo también se dispare.
             $(document).off('click.mercDelete', '.wpcfe-delete-shipment').on('click.mercDelete', '.wpcfe-delete-shipment', function(e) {
                 e.preventDefault();
+                e.stopImmediatePropagation();
                 const $btn = $(this);
                 const shipmentId = $btn.data('id');
                 if (!shipmentId) { alert('❌ Error: ID del envío no encontrado'); return; }
-                
-                const $row = $('#shipment-' + shipmentId);
-                const shipmentNumber = $row.find('td').first().text().trim() || ('Envío #' + shipmentId);
-                
+
+                // Buscar la fila desde el botón mismo (funciona en accordion y en tabla original)
+                const $row = $btn.closest('tr');
+                // El número de envío viene del checkbox de la misma fila (data-number)
+                const shipmentNumber = $row.find('.wpcfe-shipments').data('number') || ('Envío #' + shipmentId);
+
                 if (!confirm('⚠️ ¿Estás seguro de que deseas BORRAR el envío ' + shipmentNumber + '?\n\nEsta acción NO se puede deshacer.')) {
                     return;
                 }
-                
-                // Cambiar texto del botón a "Borrando..."
+
                 $btn.prop('disabled', true).text('Borrando...');
-                
-                // Realizar la solicitud para borrar
+
                 $.ajax({
                     type: 'POST',
                     url: AJAX_URL,
@@ -746,12 +747,15 @@ class MERC_Table_UI {
                     },
                     success: function(response) {
                         if (response && response.success) {
-                            // Mostrar notificación
                             const $notif = $('<div style="position: fixed; top: 20px; right: 20px; background: #f44336; color: white; padding: 15px 25px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999999; font-size: 14px;">✓ Envío eliminado correctamente</div>');
                             $('body').append($notif);
                             setTimeout(function() { $notif.fadeOut(300, function() { $(this).remove(); }); }, 3000);
-                            // Remover fila de la tabla después de 500ms
-                            setTimeout(function() { $row.fadeOut(300, function() { $(this).remove(); }); }, 500);
+                            // Eliminar la fila del DOM (funciona en accordion y tabla original)
+                            if ($row.length) {
+                                $row.fadeOut(300, function() { $(this).remove(); });
+                            } else {
+                                $('#shipment-' + shipmentId).fadeOut(300, function() { $(this).remove(); });
+                            }
                         } else {
                             alert('❌ Error: ' + (response.data || 'No se pudo eliminar el envío'));
                             $btn.prop('disabled', false).text('Borrar');

@@ -351,6 +351,38 @@ class MERC_Shipment_Table {
 						});
 					});
 				}
+
+				// 3. Asignación/Actualización masiva: reemplaza el handler de WPCargo.
+				// El handler original busca '#shipment-list .wpcfe-shipments:checked', que ya no
+				// existe tras el accordion. Usamos '.wpcfe-shipments:checked' globalmente
+				// y abrimos el modal manualmente (e.preventDefault cancela el data-toggle).
+				$('#shipments-table-list').off('click', '#shipmentBulkUpdate')
+					.on('click', '#shipmentBulkUpdate', function(e) {
+						e.preventDefault();
+						var $checked  = $('.wpcfe-shipments:checked');
+						var shipments = $checked.length;
+						$('#shipmentBulkUpdateModal #shipmentBulkUpdate-form .modal-body')
+							.find('input[type="text"], select, textarea').val('');
+						$('#shipmentBulkUpdateModal #registered_employee').val('');
+						$('#shipmentBulkUpdateModal #registered_client').val('');
+						$('#shipmentBulkUpdateModal #registered_agent').val('');
+						$('#shipmentBulkUpdateModal .shipment-list-wrapper .shipment-list li').remove();
+						if (shipments > 0) {
+							$checked.each(function() {
+								var shipmentID     = $(this).val();
+								var shipmentNumber = $(this).data('number') || shipmentID;
+								$('#shipmentBulkUpdateModal .shipment-list-wrapper .shipment-list').append(
+									'<li class="list-group-item w-50 list-group-item-action" data-id="' + shipmentID + '">' +
+									shipmentNumber + ' <span class="fa fa-trash float-right text-danger"></span></li>'
+								);
+							});
+							$('#shipmentBulkUpdateModal').modal('show');
+						} else {
+							alert(typeof wpcfeAjaxhandler !== 'undefined'
+								? wpcfeAjaxhandler.downloadErrorMessage
+								: 'Por favor seleccione al menos un envío para continuar.');
+						}
+					});
 			}
 
 			function initializeAccordion() {
