@@ -6,6 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Reorganiza columnas de la tabla de shipments del frontend WPCargo.
  * El HTML vive en admin/templates/frontend/table-*.tpl.php.
  */
+if ( ! class_exists( 'MERC_Shipment_Table' ) ) {
+
 class MERC_Shipment_Table {
 
 	private string $tpl_path;
@@ -622,7 +624,6 @@ class MERC_Shipment_Table {
 			wp_send_json_error( 'Sin shipment IDs' );
 		}
 
-		error_log( '🔍 ajax_get_shipment_summary START - shipment_ids: ' . json_encode( $shipment_ids ) );
 
 		$distritos = [];
 		$motorizados = [];
@@ -632,14 +633,12 @@ class MERC_Shipment_Table {
 			$shipment_id = intval( $shipment_id );
 			
 			$distrito = get_post_meta( $shipment_id, 'wpcargo_distrito_recojo', true );
-			error_log( "  Shipment {$shipment_id}: distrito_recojo = '{$distrito}'" );
 			
 			if ( ! empty( $distrito ) && $distrito !== '-' ) {
 				$distritos[] = $distrito;
 			}
 
 			$moto_id = get_post_meta( $shipment_id, 'wpcargo_motorizo_recojo', true );
-			error_log( "  Shipment {$shipment_id}: motorizo_recojo ID = '{$moto_id}'" );
 			
 			if ( ! empty( $moto_id ) ) {
 				$moto_id = intval( $moto_id );
@@ -647,7 +646,6 @@ class MERC_Shipment_Table {
 				$last_name = get_user_meta( $moto_id, 'last_name', true );
 				$nombre = trim( $first_name . ' ' . $last_name );
 				
-				error_log( "    Motorizado {$moto_id}: first_name='{$first_name}', last_name='{$last_name}', nombre='{$nombre}'" );
 				
 				if ( empty( $nombre ) ) {
 					$u = get_userdata( $moto_id );
@@ -664,8 +662,6 @@ class MERC_Shipment_Table {
 		$distritos = array_unique( array_filter( $distritos ) );
 		$motorizados = array_unique( array_filter( $motorizados ) );
 
-		error_log( '✅ RESULTADO - distritos: ' . json_encode( array_values( $distritos ) ) );
-		error_log( '✅ RESULTADO - motorizados: ' . json_encode( array_values( $motorizados ) ) );
 
 		wp_send_json_success( [
 			'distritos' => array_values( $distritos ),
@@ -674,5 +670,9 @@ class MERC_Shipment_Table {
 	}
 }
 
-new MERC_Shipment_Table();
+} // End if ( ! class_exists( 'MERC_Shipment_Table' ) )
+
+if ( class_exists( 'MERC_Shipment_Table' ) ) {
+	new MERC_Shipment_Table();
+}
 

@@ -13,6 +13,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Movido desde blocksy-child/functions.php al plugin merc-table-customizer.
  */
+if ( ! class_exists( 'MERC_Table_Ajax' ) ) {
+
 class MERC_Table_Ajax {
 
     public function __construct() {
@@ -24,6 +26,7 @@ class MERC_Table_Ajax {
         add_action( 'wp_ajax_merc_notificar_reprogramacion',   [ $this, 'ajax_notificar_reprogramacion' ] );
         add_action( 'wp_ajax_merc_reprogramar_envio',          [ $this, 'ajax_reprogramar_envio' ] );
         add_action( 'wp_ajax_merc_anular_envio_cliente',       [ $this, 'ajax_anular_envio' ] );
+        add_action( 'wp_ajax_merc_delete_shipment',            [ $this, 'ajax_delete_shipment' ] );
     }
 
     /* ── Filtro: mostrar fecha desde meta, no desde post_date ───────────── */
@@ -353,6 +356,100 @@ class MERC_Table_Ajax {
             'shipment_id' => $shipment_id,
         ] );
     }
+
+    /* ── AJAX: Borrar/Eliminar envío (admin función) ────────────────────── */
+
+    public function ajax_delete_shipment(): void {
+        check_ajax_referer( 'merc_delete_shipment', 'nonce' );
+
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( 'Debe iniciar sesión para esta acción' );
+        }
+
+        $shipment_id = isset( $_POST['shipment_id'] ) ? intval( $_POST['shipment_id'] ) : 0;
+        if ( empty( $shipment_id ) ) {
+            wp_send_json_error( 'ID de envío no especificado' );
+        }
+
+        $shipment = get_post( $shipment_id );
+        if ( ! $shipment || $shipment->post_type !== 'wpcargo_shipment' ) {
+            wp_send_json_error( 'Envío no encontrado' );
+        }
+
+        // Verificar permisos: solo administradores o propietario del envío
+        if ( ! current_user_can( 'manage_options' ) ) {
+            $shipper_id = get_post_meta( $shipment_id, 'registered_shipper', true );
+            if ( intval( $shipper_id ) !== get_current_user_id() ) {
+                wp_send_json_error( 'No tiene permisos para eliminar este envío' );
+            }
+        }
+
+        $shipment_number = get_post_meta( $shipment_id, 'wpcargo_shipment_number', true );
+        $estado_anterior = get_post_meta( $shipment_id, 'wpcargo_status', true );
+        $usuario_actual = wp_get_current_user();
+
+        // Agregar al historial antes de eliminar
+        $historial = get_post_meta( $shipment_id, 'wpcargo_shipments_update', true );
+        if ( ! is_array( $historial ) ) $historial = [];
+        array_unshift( $historial, [
+            'status'       => 'ELIMINADO',
+            'date'         => date( 'd/m/Y' ),
+            'time'         => date( 'H:i:s' ),
+            'updated-name' => $usuario_actual->display_name . ' (Admin)',
+            'remarks'      => "Envío eliminado. Estado anterior: {$estado_anterior}. Eliminado por: {$usuario_actual->display_name}",
+        ] );
+        update_post_meta( $shipment_id, 'wpcargo_shipments_update', $historial );
+
+        // Cambio de estado a ELIMINADO antes de trash (por si hay restricciones)
+        update_post_meta( $shipment_id, 'wpcargo_status', 'ELIMINADO' );
+
+        // Enviar a papelera en lugar de eliminar permanentemente (más seguro)
+        $resultado = wp_trash_post( $shipment_id );
+
+        if ( $resultado === false ) {
+            wp_send_json_error( 'No se pudo eliminar el envío' );
+        }
+
+        // Notificar al propietario del envío (si no es admin quién lo elimina)
+        if ( ! current_user_can( 'manage_options' ) ) {
+            $admin_email = get_option( 'admin_email' );
+            $asunto = 'Importante: Su envío ha sido eliminado - ' . $shipment_number;
+            $mensaje = "
+            <html><head><style>
+                body{font-family:Arial,sans-serif;line-height:1.6}
+                .container{max-width:600px;margin:0 auto;padding:20px;background:#f9f9f9}
+                .header{background:#f44336;color:white;padding:20px;text-align:center}
+                .content{background:white;padding:30px}
+                .info{background:#ffebee;padding:15px;margin:15px 0;border-left:4px solid #f44336}
+            </style></head>
+            <body><div class='container'>
+                <div class='header'><h2>🗑️ Envío Eliminado</h2></div>
+                <div class='content'>
+                    <div class='info'>
+                        <strong>📦 Número de envío:</strong> {$shipment_number}<br>
+                        <strong>🕐 Fecha:</strong> " . date( 'd/m/Y H:i' ) . "<br>
+                        <strong>⚠️ Estado anterior:</strong> {$estado_anterior}
+                    </div>
+                    <p>El envío ha sido eliminado del sistema. Si esto fue un error, contáctenos.</p>
+                </div>
+            </div></body></html>";
+            wp_mail( $admin_email, $asunto, $mensaje, [ 'Content-Type: text/html; charset=UTF-8' ] );
+        }
+
+        // Limpiar caché si existe
+        if ( class_exists( 'LiteSpeed_Cache_API' ) ) {
+            call_user_func( [ 'LiteSpeed_Cache_API', 'purge_all' ], 'shipment trashed' );
+        }
+
+        wp_send_json_success( [
+            'message'     => 'Envío eliminado correctamente',
+            'shipment_id' => $shipment_id,
+        ] );
+    }
 }
 
-new MERC_Table_Ajax();
+} // End if ( ! class_exists( 'MERC_Table_Ajax' ) )
+
+if ( class_exists( 'MERC_Table_Ajax' ) ) {
+    new MERC_Table_Ajax();
+}

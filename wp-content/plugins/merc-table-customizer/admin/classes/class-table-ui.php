@@ -16,6 +16,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Migrado desde blocksy-child/functions.php → merc-table-customizer.
  */
+if ( ! class_exists( 'MERC_Table_UI' ) ) {
+
 class MERC_Table_UI {
 
     public function __construct() {
@@ -713,6 +715,54 @@ class MERC_Table_UI {
                     $celdaAcciones.append($btnCrear);
                 }
             }
+
+            // Manejador para botón BORRAR/DELETE (wpcfe-delete-shipment)
+            // Este manejador se ejecuta al hacer click en el botón de borrar de las acciones
+            // Desbloquear manejador anterior (si existe) para evitar duplicados
+            $(document).off('click.mercDelete', '.wpcfe-delete-shipment').on('click.mercDelete', '.wpcfe-delete-shipment', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const shipmentId = $btn.data('id');
+                if (!shipmentId) { alert('❌ Error: ID del envío no encontrado'); return; }
+                
+                const $row = $('#shipment-' + shipmentId);
+                const shipmentNumber = $row.find('td').first().text().trim() || ('Envío #' + shipmentId);
+                
+                if (!confirm('⚠️ ¿Estás seguro de que deseas BORRAR el envío ' + shipmentNumber + '?\n\nEsta acción NO se puede deshacer.')) {
+                    return;
+                }
+                
+                // Cambiar texto del botón a "Borrando..."
+                $btn.prop('disabled', true).text('Borrando...');
+                
+                // Realizar la solicitud para borrar
+                $.ajax({
+                    type: 'POST',
+                    url: AJAX_URL,
+                    data: {
+                        action: 'merc_delete_shipment',
+                        shipment_id: shipmentId,
+                        nonce: <?php echo json_encode( wp_create_nonce( 'merc_delete_shipment' ) ); ?>
+                    },
+                    success: function(response) {
+                        if (response && response.success) {
+                            // Mostrar notificación
+                            const $notif = $('<div style="position: fixed; top: 20px; right: 20px; background: #f44336; color: white; padding: 15px 25px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999999; font-size: 14px;">✓ Envío eliminado correctamente</div>');
+                            $('body').append($notif);
+                            setTimeout(function() { $notif.fadeOut(300, function() { $(this).remove(); }); }, 3000);
+                            // Remover fila de la tabla después de 500ms
+                            setTimeout(function() { $row.fadeOut(300, function() { $(this).remove(); }); }, 500);
+                        } else {
+                            alert('❌ Error: ' + (response.data || 'No se pudo eliminar el envío'));
+                            $btn.prop('disabled', false).text('Borrar');
+                        }
+                    },
+                    error: function() {
+                        alert('❌ Error de conexión al intentar eliminar el envío');
+                        $btn.prop('disabled', false).text('Borrar');
+                    }
+                });
+            });
         }
 
         function mostrarModalProductoDesdeEnvio(shipmentId, clienteId, shipmentTitle) {
@@ -1125,4 +1175,8 @@ class MERC_Table_UI {
     }
 }
 
-new MERC_Table_UI();
+} // End if ( ! class_exists( 'MERC_Table_UI' ) )
+
+if ( class_exists( 'MERC_Table_UI' ) ) {
+    new MERC_Table_UI();
+}

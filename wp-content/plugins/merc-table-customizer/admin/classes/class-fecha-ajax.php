@@ -11,6 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Movido desde blocksy-child/functions.php para evitar el BOM del tema
  * que corrompía las respuestas AJAX con un carácter ﻿ antes del JSON.
  */
+if ( ! class_exists( 'MERC_Fecha_Ajax' ) ) {
+
 class MERC_Fecha_Ajax {
 
     public function __construct() {
@@ -79,4 +81,8 @@ class MERC_Fecha_Ajax {
     }
 }
 
-new MERC_Fecha_Ajax();
+} // End if ( ! class_exists( 'MERC_Fecha_Ajax' ) )
+
+if ( class_exists( 'MERC_Fecha_Ajax' ) ) {
+    new MERC_Fecha_Ajax();
+}
