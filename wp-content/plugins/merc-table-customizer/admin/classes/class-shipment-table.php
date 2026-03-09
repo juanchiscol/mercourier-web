@@ -353,34 +353,98 @@ class MERC_Shipment_Table {
 				}
 
 				// 3. Asignación/Actualización masiva: reemplaza el handler de WPCargo.
-				// El handler original busca '#shipment-list .wpcfe-shipments:checked', que ya no
-				// existe tras el accordion. Usamos '.wpcfe-shipments:checked' globalmente
-				// y abrimos el modal manualmente (e.preventDefault cancela el data-toggle).
-				$('#shipments-table-list').off('click', '#shipmentBulkUpdate')
-					.on('click', '#shipmentBulkUpdate', function(e) {
+				// Enlazamos DIRECTAMENTE al botón (direct binding > delegated),
+				// y usamos stopImmediatePropagation para que el handler delegado de WPCargo
+				// en #shipments-table-list nunca se ejecute.
+				$('#shipments-table-list').off('click', '#shipmentBulkUpdate');
+				$('#shipmentBulkUpdate').off('click.merc').on('click.merc', function(e) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					var $checked  = $('.wpcfe-shipments:checked');
+					var shipments = $checked.length;
+					console.log('[MTC] #shipmentBulkUpdate clicked – checked:', shipments);
+					$('#shipmentBulkUpdateModal #shipmentBulkUpdate-form .modal-body')
+						.find('input[type="text"], select, textarea').val('');
+					$('#shipmentBulkUpdateModal #registered_employee').val('');
+					$('#shipmentBulkUpdateModal #registered_client').val('');
+					$('#shipmentBulkUpdateModal #registered_agent').val('');
+					$('#shipmentBulkUpdateModal .shipment-list-wrapper .shipment-list li').remove();
+					if (shipments > 0) {
+						$checked.each(function() {
+							var shipmentID     = $(this).val();
+							var shipmentNumber = $(this).data('number') || shipmentID;
+							$('#shipmentBulkUpdateModal .shipment-list-wrapper .shipment-list').append(
+								'<li class="list-group-item w-50 list-group-item-action" data-id="' + shipmentID + '">' +
+								shipmentNumber + ' <span class="fa fa-trash float-right text-danger"></span></li>'
+							);
+						});
+						$('#shipmentBulkUpdateModal').modal('show');
+					} else {
+						alert(typeof wpcfeAjaxhandler !== 'undefined'
+							? wpcfeAjaxhandler.downloadErrorMessage
+							: 'Por favor seleccione al menos un envío para continuar.');
+					}
+				});
+
+				// 4. Borrar masivo: reemplaza el handler de WPCargo que usa '#shipment-list .wpcfe-shipments:checked'
+				// (ya no existe tras el accordion). Replicamos la misma lógica pero con selector global.
+				$(document).off('click.mercBulkDelete', '.remove-shipments')
+					.on('click.mercBulkDelete', '.remove-shipments', function(e) {
 						e.preventDefault();
+						e.stopImmediatePropagation();
 						var $checked  = $('.wpcfe-shipments:checked');
 						var shipments = $checked.length;
-						$('#shipmentBulkUpdateModal #shipmentBulkUpdate-form .modal-body')
-							.find('input[type="text"], select, textarea').val('');
-						$('#shipmentBulkUpdateModal #registered_employee').val('');
-						$('#shipmentBulkUpdateModal #registered_client').val('');
-						$('#shipmentBulkUpdateModal #registered_agent').val('');
-						$('#shipmentBulkUpdateModal .shipment-list-wrapper .shipment-list li').remove();
+
 						if (shipments > 0) {
-							$checked.each(function() {
-								var shipmentID     = $(this).val();
-								var shipmentNumber = $(this).data('number') || shipmentID;
-								$('#shipmentBulkUpdateModal .shipment-list-wrapper .shipment-list').append(
-									'<li class="list-group-item w-50 list-group-item-action" data-id="' + shipmentID + '">' +
-									shipmentNumber + ' <span class="fa fa-trash float-right text-danger"></span></li>'
-								);
+							Swal.fire({
+								title: '¿Eliminar envíos?',
+								text: '¿Estás seguro de que deseas eliminar ' + shipments + ' envío(s)? Esta acción no se puede deshacer.',
+								icon: 'warning',
+								showCancelButton: true,
+								confirmButtonColor: '#d32f2f',
+								cancelButtonColor: '#6c757d',
+								confirmButtonText: 'Sí, eliminar',
+								cancelButtonText: 'Cancelar'
+							}).then(function(result) {
+								if (result.isConfirmed) {
+									var selectedShipment = [];
+									$('.wpcfe-shipments:checked').each(function() {
+										selectedShipment.push($(this).val());
+									});
+									$.ajax({
+										type: 'POST',
+										datatype: 'json',
+										data: {
+											action: 'wpcfe_bulk_delete',
+											selectedShipment: selectedShipment
+										},
+										url: wpcfeAjaxhandler.ajaxurl,
+										beforeSend: function() {
+											$('body').append('<div class="wpcfe-spinner">Loading...</div>');
+										},
+										success: function(data) {
+											var status  = data.status;
+											var message = data.message;
+											if (status === 'error') {
+												Swal.fire({ icon: 'error', title: 'Error', text: message, confirmButtonColor: '#e74c3c' });
+											} else {
+												Swal.fire({ icon: 'success', title: 'Éxito', text: message, confirmButtonColor: '#28a745' })
+													.then(function() { location.reload(); });
+											}
+										},
+										error: function() {
+											Swal.fire({ icon: 'error', title: 'Error', text: 'Error al procesar la solicitud. Por favor intenta de nuevo.', confirmButtonColor: '#e74c3c' });
+										}
+									});
+								}
 							});
-							$('#shipmentBulkUpdateModal').modal('show');
 						} else {
-							alert(typeof wpcfeAjaxhandler !== 'undefined'
-								? wpcfeAjaxhandler.downloadErrorMessage
-								: 'Por favor seleccione al menos un envío para continuar.');
+							Swal.fire({
+								icon: 'warning',
+								title: 'Sin seleccionar',
+								text: typeof wpcfeAjaxhandler !== 'undefined' ? wpcfeAjaxhandler.downloadErrorMessage : 'No se ha seleccionado ningún envío.',
+								confirmButtonColor: '#f39c12'
+							});
 						}
 					});
 			}
