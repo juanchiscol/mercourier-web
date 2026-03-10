@@ -283,8 +283,8 @@ class MERC_Shipment_Table {
 
 			/* ── Sync estado de checkboxes globales ─────────────────────── */
 			function updateGlobalCheckboxState() {
-				var total   = $('.wpcfe-shipments').length;
-				var checked = $('.wpcfe-shipments:checked').length;
+				var total   = $('.merc-ship-ui').length;
+				var checked = $('.merc-ship-ui:checked').length;
 				var $gsa    = $('#merc-select-all-global');
 				if (!$gsa.length || total === 0) return;
 				$gsa.prop('checked', checked === total)
@@ -292,8 +292,8 @@ class MERC_Shipment_Table {
 				// Sync checkboxes de cada card
 				$('.merc-tienda-card').each(function() {
 					var $c  = $(this);
-					var ct  = $c.find('.wpcfe-shipments').length;
-					var cc  = $c.find('.wpcfe-shipments:checked').length;
+					var ct  = $c.find('.merc-ship-ui').length;
+					var cc  = $c.find('.merc-ship-ui:checked').length;
 					$c.find('.merc-card-select-all')
 					  .prop('checked', ct > 0 && cc === ct)
 					  .prop('indeterminate', cc > 0 && cc < ct);
@@ -315,7 +315,8 @@ class MERC_Shipment_Table {
 					var ck = $(this).prop('checked');
 					$(this).prop('indeterminate', false);
 					$('.merc-card-select-all').prop('checked', ck).prop('indeterminate', false);
-					$('.wpcfe-shipments').prop('checked', ck);
+					$('.merc-ship-ui').prop('checked', ck);
+					$('#shipment-list .wpcfe-shipments').prop('checked', ck);
 				});
 
 				// 2. Bulk-print: reemplaza el handler de WPCargo (que usa #shipment-list ya inexistente)
@@ -324,7 +325,7 @@ class MERC_Shipment_Table {
 						e.preventDefault();
 						var printType = $(this).data('type');
 						var selected  = [];
-						$('.wpcfe-shipments:checked').each(function() { selected.push($(this).val()); });
+						$('.merc-ship-ui:checked').each(function() { selected.push($(this).val()); });
 						if (selected.length === 0) { alert('Por favor seleccione al menos un envío'); return; }
 						$('body').append('<div class="merc-pdf-spinner" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:20px 30px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:99999;font-size:15px;">Generando PDF...</div>');
 						$.ajax({
@@ -335,7 +336,7 @@ class MERC_Shipment_Table {
 								try {
 									var d = JSON.parse(r);
 									if (d && d.file_url) {
-										$('.wpcfe-shipments, .merc-tienda-checkbox').prop('checked', false).prop('indeterminate', false);
+										$('.merc-ship-ui, .wpcfe-shipments, .merc-tienda-checkbox').prop('checked', false).prop('indeterminate', false);
 										$('#merc-select-all-global').prop('checked', false).prop('indeterminate', false);
 										var a = document.createElement('a');
 										a.href = d.file_url;
@@ -352,101 +353,6 @@ class MERC_Shipment_Table {
 					});
 				}
 
-				// 3. Asignación/Actualización masiva: reemplaza el handler de WPCargo.
-				// Enlazamos DIRECTAMENTE al botón (direct binding > delegated),
-				// y usamos stopImmediatePropagation para que el handler delegado de WPCargo
-				// en #shipments-table-list nunca se ejecute.
-				$('#shipments-table-list').off('click', '#shipmentBulkUpdate');
-				$('#shipmentBulkUpdate').off('click.merc').on('click.merc', function(e) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					var $checked  = $('.wpcfe-shipments:checked');
-					var shipments = $checked.length;
-					console.log('[MTC] #shipmentBulkUpdate clicked – checked:', shipments);
-					$('#shipmentBulkUpdateModal #shipmentBulkUpdate-form .modal-body')
-						.find('input[type="text"], select, textarea').val('');
-					$('#shipmentBulkUpdateModal #registered_employee').val('');
-					$('#shipmentBulkUpdateModal #registered_client').val('');
-					$('#shipmentBulkUpdateModal #registered_agent').val('');
-					$('#shipmentBulkUpdateModal .shipment-list-wrapper .shipment-list li').remove();
-					if (shipments > 0) {
-						$checked.each(function() {
-							var shipmentID     = $(this).val();
-							var shipmentNumber = $(this).data('number') || shipmentID;
-							$('#shipmentBulkUpdateModal .shipment-list-wrapper .shipment-list').append(
-								'<li class="list-group-item w-50 list-group-item-action" data-id="' + shipmentID + '">' +
-								shipmentNumber + ' <span class="fa fa-trash float-right text-danger"></span></li>'
-							);
-						});
-						$('#shipmentBulkUpdateModal').modal('show');
-					} else {
-						alert(typeof wpcfeAjaxhandler !== 'undefined'
-							? wpcfeAjaxhandler.downloadErrorMessage
-							: 'Por favor seleccione al menos un envío para continuar.');
-					}
-				});
-
-				// 4. Borrar masivo: reemplaza el handler de WPCargo que usa '#shipment-list .wpcfe-shipments:checked'
-				// (ya no existe tras el accordion). Replicamos la misma lógica pero con selector global.
-				$(document).off('click.mercBulkDelete', '.remove-shipments')
-					.on('click.mercBulkDelete', '.remove-shipments', function(e) {
-						e.preventDefault();
-						e.stopImmediatePropagation();
-						var $checked  = $('.wpcfe-shipments:checked');
-						var shipments = $checked.length;
-
-						if (shipments > 0) {
-							Swal.fire({
-								title: '¿Eliminar envíos?',
-								text: '¿Estás seguro de que deseas eliminar ' + shipments + ' envío(s)? Esta acción no se puede deshacer.',
-								icon: 'warning',
-								showCancelButton: true,
-								confirmButtonColor: '#d32f2f',
-								cancelButtonColor: '#6c757d',
-								confirmButtonText: 'Sí, eliminar',
-								cancelButtonText: 'Cancelar'
-							}).then(function(result) {
-								if (result.isConfirmed) {
-									var selectedShipment = [];
-									$('.wpcfe-shipments:checked').each(function() {
-										selectedShipment.push($(this).val());
-									});
-									$.ajax({
-										type: 'POST',
-										datatype: 'json',
-										data: {
-											action: 'wpcfe_bulk_delete',
-											selectedShipment: selectedShipment
-										},
-										url: wpcfeAjaxhandler.ajaxurl,
-										beforeSend: function() {
-											$('body').append('<div class="wpcfe-spinner">Loading...</div>');
-										},
-										success: function(data) {
-											var status  = data.status;
-											var message = data.message;
-											if (status === 'error') {
-												Swal.fire({ icon: 'error', title: 'Error', text: message, confirmButtonColor: '#e74c3c' });
-											} else {
-												Swal.fire({ icon: 'success', title: 'Éxito', text: message, confirmButtonColor: '#28a745' })
-													.then(function() { location.reload(); });
-											}
-										},
-										error: function() {
-											Swal.fire({ icon: 'error', title: 'Error', text: 'Error al procesar la solicitud. Por favor intenta de nuevo.', confirmButtonColor: '#e74c3c' });
-										}
-									});
-								}
-							});
-						} else {
-							Swal.fire({
-								icon: 'warning',
-								title: 'Sin seleccionar',
-								text: typeof wpcfeAjaxhandler !== 'undefined' ? wpcfeAjaxhandler.downloadErrorMessage : 'No se ha seleccionado ningún envío.',
-								confirmButtonColor: '#f39c12'
-							});
-						}
-					});
 			}
 
 			function initializeAccordion() {
@@ -485,7 +391,9 @@ class MERC_Shipment_Table {
 						tiendas[tienda] = [];
 						orden.push(tienda);
 					}
-					tiendas[tienda].push($row.clone());
+					var $cloned = $row.clone();
+					$cloned.find('.wpcfe-shipments').removeClass('wpcfe-shipments').addClass('merc-ship-ui');
+					tiendas[tienda].push($cloned);
 				});
 
 				console.log('📊 Tiendas agrupadas:', orden.length);
@@ -606,16 +514,10 @@ class MERC_Shipment_Table {
 					$accordion.append($card);
 				});
 
-				// Reemplazar tabla y marcar wrapper para evitar procesamiento posterior
-				const $wrapper = $table.closest('#shipment-history-list') || $table.closest('.table-responsive') || $table.parent();
-				
-				if ($wrapper.length) {
-					// Reemplazar contenido del wrapper para que otros scripts no procesen tablas antiguas
-					$wrapper.html($accordion);
-					$wrapper.addClass('merc-accordion-processed'); // Marcar para que otros scripts salten
-				} else {
-					$table.replaceWith($accordion);
-				}
+				// Mantener tabla original OCULTA en el DOM -- WPCargo necesita '#shipment-list'
+				// para sus handlers de bulk actions. El accordion se inserta antes de ella.
+				$table.before($accordion);
+				$table.hide().addClass('merc-accordion-processed').attr('aria-hidden', 'true');
 
 				initialized = true;
 				postAccordionSetup();
@@ -646,20 +548,26 @@ class MERC_Shipment_Table {
 					var isChecked = $cb.prop('checked');
 					$cb.prop('indeterminate', false);
 					var $card = $cb.closest('.merc-tienda-card');
-					$card.find('.wpcfe-shipments').prop('checked', isChecked);
+					$card.find('.merc-ship-ui').prop('checked', isChecked);
+					$card.find('.merc-ship-ui').each(function() {
+						$('#shipment-list .wpcfe-shipments[value="' + $(this).val() + '"]').prop('checked', isChecked);
+					});
 					updateGlobalCheckboxState();
 				});
 
 				// ── Sync encabezado al cambiar fila individual ──────────────────────
-				$(document).on('change', '.wpcfe-shipments', function() {
+				$(document).on('change', '.merc-ship-ui', function() {
+					var id  = $(this).val();
+					var ck  = $(this).prop('checked');
+					$('#shipment-list .wpcfe-shipments[value="' + id + '"]').prop('checked', ck);
 					var $card = $(this).closest('.merc-tienda-card');
 					updateGlobalCheckboxState();
 					if (!$card.length) return;
-					var total   = $card.find('.wpcfe-shipments').length;
-					var checked = $card.find('.wpcfe-shipments:checked').length;
-					var allCk   = checked === total && total > 0;
-					var someCk  = checked > 0 && checked < total;
-					$card.find('.merc-card-select-all').prop('checked', allCk).prop('indeterminate', someCk);
+					var total = $card.find('.merc-ship-ui').length;
+					var cnt   = $card.find('.merc-ship-ui:checked').length;
+					$card.find('.merc-card-select-all')
+						.prop('checked', cnt === total && total > 0)
+						.prop('indeterminate', cnt > 0 && cnt < total);
 				});
 
 				// Print por fila: event delegation desde document (sobrevive al accordion)

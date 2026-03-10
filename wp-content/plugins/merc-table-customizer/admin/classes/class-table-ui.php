@@ -729,7 +729,7 @@ class MERC_Table_UI {
                 // Buscar la fila desde el botón mismo (funciona en accordion y en tabla original)
                 const $row = $btn.closest('tr');
                 // El número de envío viene del checkbox de la misma fila (data-number)
-                const shipmentNumber = $row.find('.wpcfe-shipments').data('number') || ('Envío #' + shipmentId);
+                const shipmentNumber = $row.find('.wpcfe-shipments, .merc-ship-ui').data('number') || ('Envío #' + shipmentId);
 
                 if (!confirm('⚠️ ¿Estás seguro de que deseas BORRAR el envío ' + shipmentNumber + '?\n\nEsta acción NO se puede deshacer.')) {
                     return;
