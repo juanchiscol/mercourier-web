@@ -542,6 +542,17 @@ class MERC_Shipment_Table {
 				console.log('📌 Document ready');
 				setTimeout(initializeAccordion, 500);
 
+				// ── Cuando WPCargo cierra #shipmentBulkUpdateModal llama reset_selected_shipment()
+				// que desmarca .wpcfe-shipments en la tabla oculta. Re-sincronizamos desde el
+				// estado del accordion para preservar la selección del usuario. ──
+				$(document).on('hidden.bs.modal', '#shipmentBulkUpdateModal', function() {
+					setTimeout(function() {
+						$('.merc-ship-ui:checked').each(function() {
+							$('#shipment-list .wpcfe-shipments[value="' + $(this).val() + '"]').prop('checked', true);
+						});
+					}, 0);
+				});
+
 				// ── Checkbox select-all de cada card (delegado desde document) ──────
 				$(document).on('change', '.merc-card-select-all', function() {
 					var $cb = $(this);
